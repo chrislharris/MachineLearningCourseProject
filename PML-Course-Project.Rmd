@@ -1,0 +1,80 @@
+---
+title: "PML-Course_Project - Human Activity Recognition"
+author: "Chris Harris"
+date: "6/8/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Synopsis
+
+We are given the data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The goal of this activity is to build a model that will predict which activity is being performed based on the data. We do this via a random forest. We perform cross validation to predict the out-of-sample error. This is used to correctly predict the value for 20 different test cases. 
+
+## Data Processing
+
+We first load the data and look at the field names.
+
+```{r}
+library(caret)
+set.seed(55555)
+train0 <- read.csv("data/pml-training.csv")
+names(train0)
+```
+
+The first seven columns are not useful as predictor variables. We also remove columns containing missing values. Furthermore, viewing a summary of the data (suppressed here because it generates a large output) shows that several of the variables are factor variables with a large number of factors. Including these would cause trouble fitting our random forests. So we also omit these. Doing so causes us to lose out outcome variable; so we also put that back in.
+
+``` {r}
+train <- train0[,-c(1,2,3,4,5,6,7)]
+train <- train[,colSums(is.na(train)) == 0]
+train <- train[,!sapply(train, is.factor) ]
+train <- cbind(train0$classe, train)
+names(train)[1] <- "classe"
+length(names(train))
+```
+
+Consequently we have reduced from 159 potential predictor variables down to a more manageable 52.
+
+## Analysis
+
+We do the simplest sort of cross validation, the holdout method, and split the data into a testing and training set to understand the in-sample and out-of-sample error. We use 75% of the original data for training and 25% to test.
+
+```{r}
+inTrain <- createDataPartition(y=train$classe, p=0.75, list=FALSE)
+training  <- train[inTrain,]
+testing  <- train[-inTrain,]
+```
+
+We now build a random forest to predict the *classe* variable and use all of the other variables as potential predictors.
+
+```{r}
+library(randomForest)
+modFitRF <- randomForest(classe~., data=training, importance=TRUE, ntree=50)
+modFitRF
+```
+
+In this case the model exactly fits the data as the in-sample error is
+
+```{r}
+predTrain <- predict(modFitRF,training)
+n <- length(training$classe)
+1-sum(predTrain == training$classe)/n
+```
+
+The out of sample error can be estimated via the following 
+
+```{r}
+pred <- predict(modFitRF,testing)
+n <- length(testing$classe)
+confusionMatrix(pred, testing$classe)
+1-sum(pred == testing$classe)/n
+```
+
+The results for the prediction quiz are obtained from the following (answer suppressed). 
+```{r }
+test0 <- read.csv("data/pml-testing.csv")
+test <- test0[,names(train)[2:53]]
+#predict(modFitRF,test)
+```
